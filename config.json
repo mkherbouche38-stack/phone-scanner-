@@ -1,0 +1,32 @@
+{
+  "intervalSeconds": 60,
+  "exclude": ["coque", "protection", "verre trempé", "vitre de protection", "étui", "housse", "chargeur", "câble", "support", "boîte vide", "boite vide", "factice", "maquette"],
+  "searches": [
+    { "name": "📱 iPhone cassé", "query": "iphone cassé", "maxPrice": 150 },
+    { "name": "📱 iPhone HS", "query": "iphone hs", "maxPrice": 150 },
+    { "name": "📱 iPhone écran cassé", "query": "iphone écran cassé", "maxPrice": 120 },
+    { "name": "🔋 iPhone batterie défectueuse", "query": "iphone batterie défectueuse", "maxPrice": 100 },
+    { "name": "🔙 iPhone dos cassé", "query": "iphone vitre arrière cassée", "maxPrice": 120 },
+    { "name": "🔙 iPhone arrière cassé", "query": "iphone dos cassé", "maxPrice": 120 },
+    { "name": "⚫ iPhone ne s'allume pas", "query": "iphone ne s'allume pas", "maxPrice": 100 },
+    { "name": "🧩 iPhone pour pièces", "query": "iphone pour pièces", "maxPrice": 100 },
+    {
+      "name": "🔒 iPhone bloqué iCloud (bon état)",
+      "query": "iphone bloqué icloud",
+      "maxPrice": 150,
+      "exclude": ["cass", "fissur", "brisé", "hs", "ne s'allume pas"]
+    },
+    {
+      "name": "🔒 iPhone verrouillé iCloud (bon état)",
+      "query": "iphone verrouillé icloud",
+      "maxPrice": 150,
+      "exclude": ["cass", "fissur", "brisé", "hs", "ne s'allume pas"]
+    },
+    {
+      "name": "🔒 iPhone compte iCloud (bon état)",
+      "query": "iphone compte icloud",
+      "maxPrice": 150,
+      "exclude": ["cass", "fissur", "brisé", "hs", "ne s'allume pas"]
+    }
+  ]
+}
