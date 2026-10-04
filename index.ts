@@ -55,18 +55,50 @@ async function sendToDiscord(l: Listing, searchName: string, retry = 0): Promise
   if (!r.ok) throw new Error(`Discord HTTP ${r.status}`);
 }
 
-const UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36";
+const UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36";
 const VBASE = "https://www.vinted.fr";
 let cookie = "";
 let cookieAt = 0;
+let blockedUntil = 0;
+
+const pageHeaders = {
+  "user-agent": UA,
+  accept: "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
+  "accept-language": "fr-FR,fr;q=0.9,en;q=0.8",
+  "sec-ch-ua": '"Chromium";v="124", "Google Chrome";v="124", "Not-A.Brand";v="99"',
+  "sec-ch-ua-mobile": "?0",
+  "sec-ch-ua-platform": '"Windows"',
+  "sec-fetch-dest": "document",
+  "sec-fetch-mode": "navigate",
+  "sec-fetch-site": "none",
+  "sec-fetch-user": "?1",
+  "upgrade-insecure-requests": "1",
+};
+const apiHeaders = () => ({
+  "user-agent": UA,
+  accept: "application/json, text/plain, */*",
+  "accept-language": "fr-FR,fr;q=0.9,en;q=0.8",
+  referer: VBASE + "/catalog",
+  origin: VBASE,
+  "sec-ch-ua": '"Chromium";v="124", "Google Chrome";v="124", "Not-A.Brand";v="99"',
+  "sec-ch-ua-mobile": "?0",
+  "sec-ch-ua-platform": '"Windows"',
+  "sec-fetch-dest": "empty",
+  "sec-fetch-mode": "cors",
+  "sec-fetch-site": "same-origin",
+  cookie,
+});
+
 async function refreshCookie() {
-  const r = await fetch(VBASE + "/", { headers: { "user-agent": UA, "accept-language": "fr-FR,fr;q=0.9" } });
-  cookie = r.headers.getSetCookie().map((c) => c.split(";")[0]).join("; ");
+  const r = await fetch(VBASE + "/", { headers: pageHeaders });
+  const set = r.headers.getSetCookie();
+  cookie = set.map((c) => c.split(";")[0]).join("; ");
   cookieAt = Date.now();
+  console.log(`Vinted accueil : HTTP ${r.status}, ${set.length} cookies`);
 }
-const vHeaders = () => ({ "user-agent": UA, accept: "application/json, text/plain, */*", "accept-language": "fr-FR,fr;q=0.9", cookie });
 
 async function searchVinted(query: string, maxPrice?: number): Promise<Listing[]> {
+  if (Date.now() < blockedUntil) throw new Error("en pause (Vinted bloque), nouvel essai plus tard");
   if (!cookie || Date.now() - cookieAt > 20 * 60_000) await refreshCookie();
   const u = new URL(VBASE + "/api/v2/catalog/items");
   u.searchParams.set("search_text", query);
@@ -74,12 +106,19 @@ async function searchVinted(query: string, maxPrice?: number): Promise<Listing[]
   u.searchParams.set("per_page", "30");
   u.searchParams.set("page", "1");
   if (maxPrice) u.searchParams.set("price_to", String(maxPrice));
-  let r = await fetch(u, { headers: vHeaders() });
+  let r = await fetch(u, { headers: apiHeaders() });
   if (r.status === 401 || r.status === 403) {
     await refreshCookie();
-    r = await fetch(u, { headers: vHeaders() });
+    r = await fetch(u, { headers: apiHeaders() });
   }
-  if (!r.ok) throw new Error(`Vinted HTTP ${r.status}`);
+  if (!r.ok) {
+    if (r.status === 403 || r.status === 429) {
+      blockedUntil = Date.now() + 5 * 60_000;
+      const txt = (await r.text()).slice(0, 150).replace(/\s+/g, " ");
+      console.error(`Vinted bloque (HTTP ${r.status}) : ${txt}`);
+    }
+    throw new Error(`Vinted HTTP ${r.status}`);
+  }
   const data: any = await r.json();
   return (data.items ?? []).map((it: any): Listing => {
     const isObj = typeof it.price === "object";
@@ -161,7 +200,7 @@ async function cycle(silent: boolean) {
       } catch (e) {
         console.error(`[${src.name}] "${s.query}" :`, (e as Error).message);
       }
-      await sleep(1500);
+      await sleep(2500);
     }
   }
   saveSeen();
@@ -179,6 +218,6 @@ try {
 
 await cycle(wasEmpty);
 while (true) {
-  await sleep(config.intervalSeconds * 1000);
+  await sleep(Math.max(config.intervalSeconds, 90) * 1000);
   await cycle(false);
 }
