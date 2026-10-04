@@ -1,7 +1,20 @@
 {
   "intervalSeconds": 90,
-  "exclude": ["coque", "protection", "verre trempé", "vitre de protection", "étui", "housse", "chargeur", "câble", "support", "boîte vide", "boite vide", "factice", "maquette"],
+  "exclude": [
+    "coque", "protection", "verre trempé", "vitre de protection", "étui", "housse", "chargeur", "câble", "support", "boîte vide", "boite vide", "factice", "maquette",
+    "iphone 4", "iphone 5", "iphone 6", "iphone 7", "iphone 8", "iphone se", "iphone x "
+  ],
   "searches": [
+    { "name": "📱 iPhone XR cassé", "query": "iphone xr cassé", "maxPrice": 70 },
+    { "name": "📱 iPhone XS cassé", "query": "iphone xs cassé", "maxPrice": 80 },
+    { "name": "📱 iPhone 11 cassé", "query": "iphone 11 cassé", "maxPrice": 90 },
+    { "name": "📱 iPhone 12 cassé", "query": "iphone 12 cassé", "maxPrice": 120 },
+    { "name": "📱 iPhone 13 cassé", "query": "iphone 13 cassé", "maxPrice": 150 },
+    { "name": "📱 iPhone 14 cassé", "query": "iphone 14 cassé", "maxPrice": 200 },
+    { "name": "📱 iPhone 15 cassé", "query": "iphone 15 cassé", "maxPrice": 280 },
+    { "name": "📱 iPhone 16 cassé", "query": "iphone 16 cassé", "maxPrice": 380 },
+    { "name": "📱 iPhone 17 cassé", "query": "iphone 17 cassé", "maxPrice": 500 },
+
     { "name": "📱 iPhone cassé (très bas prix)", "query": "iphone cassé", "maxPrice": 60 },
     { "name": "📱 iPhone HS (très bas prix)", "query": "iphone hs", "maxPrice": 60 },
     { "name": "📱 iPhone écran cassé", "query": "iphone écran cassé", "maxPrice": 50 },
@@ -9,21 +22,17 @@
     { "name": "🔙 iPhone dos cassé", "query": "iphone dos cassé", "maxPrice": 60 },
     { "name": "⚫ iPhone ne s'allume pas", "query": "iphone ne s'allume pas", "maxPrice": 50 },
     { "name": "🧩 iPhone pour pièces", "query": "iphone pour pièces", "maxPrice": 50 },
-    { "name": "📱 iPhone 11 cassé", "query": "iphone 11 cassé", "maxPrice": 70 },
-    { "name": "📱 iPhone 12 cassé", "query": "iphone 12 cassé", "maxPrice": 100 },
-    { "name": "📱 iPhone 13 cassé", "query": "iphone 13 cassé", "maxPrice": 130 },
-    { "name": "📱 iPhone 14 cassé", "query": "iphone 14 cassé", "maxPrice": 180 },
-    { "name": "📱 iPhone 15 cassé", "query": "iphone 15 cassé", "maxPrice": 250 },
+
     {
       "name": "🔒 iPhone bloqué iCloud (bon état)",
       "query": "iphone bloqué icloud",
-      "maxPrice": 100,
+      "maxPrice": 120,
       "exclude": ["cass", "fissur", "brisé", "hs", "ne s'allume pas"]
     },
     {
       "name": "🔒 iPhone verrouillé iCloud (bon état)",
       "query": "iphone verrouillé icloud",
-      "maxPrice": 100,
+      "maxPrice": 120,
       "exclude": ["cass", "fissur", "brisé", "hs", "ne s'allume pas"]
     }
   ]
