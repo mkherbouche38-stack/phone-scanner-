@@ -6,7 +6,8 @@
     "t-shirt", "pull", "jean", "short", "veste", "robe", "pantalon", "sweat", "chemise", "manteau",
     "écran de remplacement", "remplacement", "kit", "outil", "nappe",
     "iphone 4", "iphone 5", "iphone 6", "iphone 7", "iphone 8", "iphone se", "iphone x ",
-    "icloud", "bloqué", "bloque", "verrouillé", "verrouille", "pour pièces", "pour pieces", "pièces", "pieces"
+    "icloud", "bloqué", "bloque", "verrouillé", "verrouille", "pour pièces", "pour pieces", "pièces", "pieces",
+    "samsung", "galaxy", "xiaomi", "redmi", "huawei", "oppo", "realme", "pixel", "android", "oneplus", "honor"
   ],
   "searches": [
     { "name": "📱 iPhone XR cassé", "query": "iphone xr cassé", "maxPrice": 40 },
@@ -51,11 +52,24 @@
     { "name": "📱 iPhone 18 Pro cassé", "query": "iphone 18 pro cassé", "maxPrice": 350 },
     { "name": "📱 iPhone 18 Pro Max cassé", "query": "iphone 18 pro max cassé", "maxPrice": 380 },
 
-    { "name": "📱 iPhone cassé (très bas prix)", "query": "iphone cassé", "maxPrice": 40 },
-    { "name": "📱 iPhone HS (très bas prix)", "query": "iphone hs", "maxPrice": 40 },
-    { "name": "📱 iPhone écran cassé", "query": "iphone écran cassé", "maxPrice": 40 },
+    { "name": "📞 Téléphone cassé", "query": "téléphone cassé", "maxPrice": 40 },
+    { "name": "📞 Smartphone cassé", "query": "smartphone cassé", "maxPrice": 40 },
+    { "name": "📱 iPhone cassé", "query": "iphone cassé", "maxPrice": 40 },
+    { "name": "📱 iPhone HS", "query": "iphone hs", "maxPrice": 40 },
+    { "name": "💥 iPhone écran cassé", "query": "iphone écran cassé", "maxPrice": 40 },
+    { "name": "💥 iPhone écran HS", "query": "iphone écran hs", "maxPrice": 40 },
+    { "name": "💥 iPhone écran fissuré", "query": "iphone écran fissuré", "maxPrice": 40 },
+    { "name": "👆 iPhone tactile ne marche pas", "query": "iphone tactile ne marche pas", "maxPrice": 40 },
     { "name": "🔋 iPhone batterie défectueuse", "query": "iphone batterie défectueuse", "maxPrice": 40 },
+    { "name": "🔋 iPhone batterie ne marche pas", "query": "iphone batterie ne marche pas", "maxPrice": 40 },
+    { "name": "🔌 iPhone ne charge pas", "query": "iphone ne charge pas", "maxPrice": 40 },
     { "name": "🔙 iPhone dos cassé", "query": "iphone dos cassé", "maxPrice": 40 },
-    { "name": "⚫ iPhone ne s'allume pas", "query": "iphone ne s'allume pas", "maxPrice": 40 }
+    { "name": "🔙 iPhone vitre arrière cassée", "query": "iphone vitre arrière cassée", "maxPrice": 40 },
+    { "name": "📷 iPhone caméra cassée", "query": "iphone caméra cassée", "maxPrice": 40 },
+    { "name": "🙂 iPhone Face ID ne marche pas", "query": "iphone face id ne marche pas", "maxPrice": 40 },
+    { "name": "⚫ iPhone ne s'allume pas", "query": "iphone ne s'allume pas", "maxPrice": 40 },
+    { "name": "⚫ iPhone ne démarre pas", "query": "iphone ne démarre pas", "maxPrice": 40 },
+    { "name": "🧠 iPhone carte mère HS", "query": "iphone carte mère hs", "maxPrice": 40 },
+    { "name": "🛠️ iPhone en panne", "query": "iphone en panne", "maxPrice": 40 }
   ]
 }
