@@ -10,11 +10,13 @@ interface Listing {
   image?: string;
   extra?: string;
 }
+
 interface Search { name: string; query: string; maxPrice?: number; exclude?: string[] }
 
 const config = JSON.parse(readFileSync("config.json", "utf8")) as {
   intervalSeconds: number; exclude: string[]; searches: Search[];
 };
+
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 const norm = (s: string) => s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
 
@@ -24,6 +26,7 @@ const seen = new Set<string>(wasEmpty ? [] : JSON.parse(readFileSync(SEEN_FILE, 
 const saveSeen = () => writeFileSync(SEEN_FILE, JSON.stringify([...seen].slice(-8000)));
 
 const COLORS = { vinted: 0x09b1ba, ebay: 0xe53238 } as const;
+
 async function sendToDiscord(l: Listing, searchName: string, retry = 0): Promise<void> {
   const url = process.env.DISCORD_WEBHOOK_URL;
   if (!url) throw new Error("DISCORD_WEBHOOK_URL manquant");
@@ -63,6 +66,7 @@ const jar = new Map<string, string>();
 let blockedUntil = 0;
 
 const cookieHeader = () => [...jar].map(([k, v]) => `${k}=${v}`).join("; ");
+
 function storeCookies(res: Response) {
   for (const c of res.headers.getSetCookie()) {
     const [pair] = c.split(";");
@@ -70,6 +74,7 @@ function storeCookies(res: Response) {
     if (i > 0) jar.set(pair.slice(0, i).trim(), pair.slice(i + 1));
   }
 }
+
 const vHeaders = (extra: Record<string, string> = {}): Record<string, string> => ({
   "user-agent": UA,
   accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
@@ -118,6 +123,7 @@ async function getCatalogHtml(u: URL): Promise<string> {
 
 const decode = (s: string) =>
   s.replace(/&amp;/g, "&").replace(/&quot;/g, '"').replace(/&#39;|&apos;/g, "'").replace(/&nbsp;/g, " ").replace(/&lt;/g, "<").replace(/&gt;/g, ">");
+
 const SP = "(?:\\s|\\u00a0|\\u202f|&nbsp;|&#160;|&#8239;)*";
 const PRICE_RE = new RegExp("(\\d{1,5}(?:[.,]\\d{1,2})?)" + SP + "(?:€|&euro;|&#8364;)");
 const STATE_RE = /(Neuf avec étiquette|Neuf sans étiquette|Très bon état|Bon état|Satisfaisant)/i;
@@ -201,6 +207,7 @@ async function searchVinted(query: string, maxPrice?: number): Promise<Listing[]
 // ---------- eBay (optionnel) ----------
 let token = "";
 let tokenExp = 0;
+
 async function ebayToken(): Promise<string> {
   if (token && Date.now() < tokenExp) return token;
   const auth = Buffer.from(`${process.env.EBAY_CLIENT_ID}:${process.env.EBAY_CLIENT_SECRET}`).toString("base64");
@@ -215,6 +222,7 @@ async function ebayToken(): Promise<string> {
   tokenExp = Date.now() + (j.expires_in - 120) * 1000;
   return token;
 }
+
 async function searchEbay(query: string, maxPrice?: number): Promise<Listing[]> {
   if (!process.env.EBAY_CLIENT_ID || !process.env.EBAY_CLIENT_SECRET) return [];
   const u = new URL("https://api.ebay.com/buy/browse/v1/item_summary/search");
@@ -242,8 +250,13 @@ async function searchEbay(query: string, maxPrice?: number): Promise<Listing[]> 
 }
 
 // ---------- Boucle principale ----------
+const MIN_PRIX = 15; // en dessous : presque toujours un accessoire
+
 const allowed = (l: Listing, s: Search) => {
   const t = norm(l.title);
+  if (!t.includes("iphone")) return false; // uniquement des iPhone
+  if (l.price < MIN_PRIX) return false;
+  if (s.maxPrice && l.price > s.maxPrice) return false;
   return ![...config.exclude, ...(s.exclude ?? [])].some((w) => t.includes(norm(w)));
 };
 
@@ -258,8 +271,9 @@ async function cycle(silent: boolean) {
         const items = (await src.run()).reverse();
         for (const l of items) {
           if (seen.has(l.id)) continue;
+          if (!allowed(l, s)) continue;
           seen.add(l.id);
-          if (silent || !allowed(l, s)) continue;
+          if (silent) continue;
           await sendToDiscord(l, s.name);
           console.log(`➡️ ${l.source} | ${l.price}€ | ${l.title}`);
           await sleep(1200);
