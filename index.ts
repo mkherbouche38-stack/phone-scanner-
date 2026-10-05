@@ -16,6 +16,7 @@ const config = JSON.parse(readFileSync("config.json", "utf8")) as {
   intervalSeconds: number; exclude: string[]; searches: Search[];
 };
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+const norm = (s: string) => s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
 
 const SEEN_FILE = "seen.json";
 const wasEmpty = !existsSync(SEEN_FILE);
@@ -25,7 +26,7 @@ const saveSeen = () => writeFileSync(SEEN_FILE, JSON.stringify([...seen].slice(-
 const COLORS = { vinted: 0x09b1ba, ebay: 0xe53238 } as const;
 async function sendToDiscord(l: Listing, searchName: string, retry = 0): Promise<void> {
   const url = process.env.DISCORD_WEBHOOK_URL;
-  if (!url) throw new Error("DISCORD_WEBHOOK_URL manquant (variable Railway)");
+  if (!url) throw new Error("DISCORD_WEBHOOK_URL manquant");
   const body = {
     username: "Phone Scanner",
     embeds: [{
@@ -55,13 +56,14 @@ async function sendToDiscord(l: Listing, searchName: string, retry = 0): Promise
   if (!r.ok) throw new Error(`Discord HTTP ${r.status}`);
 }
 
+// ---------- Vinted (lecture de la page de recherche) ----------
 const UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36";
 const VBASE = "https://www.vinted.fr";
 let cookie = "";
 let cookieAt = 0;
 let blockedUntil = 0;
 
-const pageHeaders = {
+const pageHeaders = (): Record<string, string> => ({
   "user-agent": UA,
   accept: "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
   "accept-language": "fr-FR,fr;q=0.9,en;q=0.8",
@@ -73,68 +75,76 @@ const pageHeaders = {
   "sec-fetch-site": "none",
   "sec-fetch-user": "?1",
   "upgrade-insecure-requests": "1",
-};
-const apiHeaders = () => ({
-  "user-agent": UA,
-  accept: "application/json, text/plain, */*",
-  "accept-language": "fr-FR,fr;q=0.9,en;q=0.8",
-  referer: VBASE + "/catalog",
-  origin: VBASE,
-  "sec-ch-ua": '"Chromium";v="124", "Google Chrome";v="124", "Not-A.Brand";v="99"',
-  "sec-ch-ua-mobile": "?0",
-  "sec-ch-ua-platform": '"Windows"',
-  "sec-fetch-dest": "empty",
-  "sec-fetch-mode": "cors",
-  "sec-fetch-site": "same-origin",
-  cookie,
+  ...(cookie ? { cookie } : {}),
 });
 
 async function refreshCookie() {
-  const r = await fetch(VBASE + "/", { headers: pageHeaders });
+  cookie = "";
+  const r = await fetch(VBASE + "/", { headers: pageHeaders() });
   const set = r.headers.getSetCookie();
   cookie = set.map((c) => c.split(";")[0]).join("; ");
   cookieAt = Date.now();
   console.log(`Vinted accueil : HTTP ${r.status}, ${set.length} cookies`);
 }
 
+const SP = "(?:\\s|\\u00a0|\\u202f|&nbsp;|&#160;|&#8239;)*";
+const PRICE_RE = new RegExp("(\\d{1,5}(?:[.,]\\d{1,2})?)" + SP + "(?:€|&euro;|&#8364;)");
+const STATE_RE = /(Neuf avec étiquette|Neuf sans étiquette|Très bon état|Bon état|Satisfaisant)/i;
+
+function parseCatalog(html: string): Listing[] {
+  const found: { id: string; slug: string; idx: number }[] = [];
+  const ids = new Set<string>();
+  for (const m of html.matchAll(/\/items\/(\d{6,})-([a-z0-9-]*)/g)) {
+    if (ids.has(m[1])) continue;
+    ids.add(m[1]);
+    found.push({ id: m[1], slug: m[2], idx: m.index ?? 0 });
+  }
+  const out: Listing[] = [];
+  found.forEach((f, i) => {
+    const end = Math.min(found[i + 1]?.idx ?? f.idx + 5000, f.idx + 5000);
+    const seg = html.slice(f.idx, end);
+    const jsonPrice = seg.match(/"amount"\s*:\s*"?(\d+(?:\.\d+)?)/);
+    const htmlPrice = seg.match(PRICE_RE);
+    const raw = jsonPrice?.[1] ?? htmlPrice?.[1];
+    if (!raw) return;
+    const jsonTitle = seg.match(/"title"\s*:\s*"([^"]{3,200})"/);
+    const img = seg.match(/https:\/\/images\d*\.vinted\.net\/[^"'\s)<>\\]+/);
+    const state = seg.match(STATE_RE);
+    out.push({
+      id: `vinted:${f.id}`,
+      source: "vinted",
+      title: jsonTitle?.[1] ?? f.slug.replace(/-/g, " "),
+      price: Number(raw.replace(",", ".")),
+      currency: "EUR",
+      url: `${VBASE}/items/${f.id}-${f.slug}`,
+      image: img?.[0],
+      extra: state?.[1],
+    });
+  });
+  return out;
+}
+
 async function searchVinted(query: string, maxPrice?: number): Promise<Listing[]> {
   if (Date.now() < blockedUntil) throw new Error("en pause (Vinted bloque), nouvel essai plus tard");
   if (!cookie || Date.now() - cookieAt > 20 * 60_000) await refreshCookie();
-  const u = new URL(VBASE + "/api/v2/catalog/items");
+  const u = new URL(VBASE + "/catalog");
   u.searchParams.set("search_text", query);
   u.searchParams.set("order", "newest_first");
-  u.searchParams.set("per_page", "30");
-  u.searchParams.set("page", "1");
   if (maxPrice) u.searchParams.set("price_to", String(maxPrice));
-  let r = await fetch(u, { headers: apiHeaders() });
-  if (r.status === 401 || r.status === 403) {
-    await refreshCookie();
-    r = await fetch(u, { headers: apiHeaders() });
-  }
+  const r = await fetch(u, { headers: { ...pageHeaders(), referer: VBASE + "/" } });
   if (!r.ok) {
     if (r.status === 403 || r.status === 429) {
       blockedUntil = Date.now() + 5 * 60_000;
-      const txt = (await r.text()).slice(0, 150).replace(/\s+/g, " ");
-      console.error(`Vinted bloque (HTTP ${r.status}) : ${txt}`);
+      console.error(`Vinted bloque (HTTP ${r.status})`);
     }
     throw new Error(`Vinted HTTP ${r.status}`);
   }
-  const data: any = await r.json();
-  return (data.items ?? []).map((it: any): Listing => {
-    const isObj = typeof it.price === "object";
-    return {
-      id: `vinted:${it.id}`,
-      source: "vinted",
-      title: it.title,
-      price: isObj ? Number(it.price.amount) : Number(it.price),
-      currency: isObj ? it.price.currency_code : it.currency ?? "EUR",
-      url: it.url ?? `${VBASE}${it.path}`,
-      image: it.photo?.url,
-      extra: [it.brand_title, it.size_title, it.status].filter(Boolean).join(" · ") || undefined,
-    };
-  });
+  const items = parseCatalog(await r.text());
+  console.log(`🔎 ${query} : ${items.length} annonces lues`);
+  return items;
 }
 
+// ---------- eBay (optionnel) ----------
 let token = "";
 let tokenExp = 0;
 async function ebayToken(): Promise<string> {
@@ -177,8 +187,11 @@ async function searchEbay(query: string, maxPrice?: number): Promise<Listing[]> 
   }));
 }
 
-const allowed = (l: Listing, s: Search) =>
-  ![...config.exclude, ...(s.exclude ?? [])].some((w) => l.title.toLowerCase().includes(w.toLowerCase()));
+// ---------- Boucle principale ----------
+const allowed = (l: Listing, s: Search) => {
+  const t = norm(l.title);
+  return ![...config.exclude, ...(s.exclude ?? [])].some((w) => t.includes(norm(w)));
+};
 
 async function cycle(silent: boolean) {
   for (const s of config.searches) {
