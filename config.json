@@ -5,44 +5,57 @@
     "objectif", "lentille", "protecteur", "protège", "film", "pochette", "adaptateur", "airpods", "écouteur", "montre", "bracelet", "lot de",
     "t-shirt", "pull", "jean", "short", "veste", "robe", "pantalon", "sweat", "chemise", "manteau",
     "écran de remplacement", "remplacement", "kit", "outil", "nappe",
-    "iphone 4", "iphone 5", "iphone 6", "iphone 7", "iphone 8", "iphone se", "iphone x "
+    "iphone 4", "iphone 5", "iphone 6", "iphone 7", "iphone 8", "iphone se", "iphone x ",
+    "icloud", "bloqué", "bloque", "verrouillé", "verrouille", "pour pièces", "pour pieces", "pièces", "pieces"
   ],
   "searches": [
-    { "name": "📱 iPhone XR cassé", "query": "iphone xr cassé", "maxPrice": 70 },
-    { "name": "📱 iPhone XS cassé", "query": "iphone xs cassé", "maxPrice": 80 },
-    { "name": "📱 iPhone 11 cassé", "query": "iphone 11 cassé", "maxPrice": 90 },
-    { "name": "📱 iPhone 11 Pro / Pro Max cassé", "query": "iphone 11 pro cassé", "maxPrice": 110 },
-    { "name": "📱 iPhone 12 cassé", "query": "iphone 12 cassé", "maxPrice": 120 },
-    { "name": "📱 iPhone 12 Pro / Pro Max cassé", "query": "iphone 12 pro cassé", "maxPrice": 140 },
-    { "name": "📱 iPhone 13 cassé", "query": "iphone 13 cassé", "maxPrice": 150 },
-    { "name": "📱 iPhone 13 Pro / Pro Max cassé", "query": "iphone 13 pro cassé", "maxPrice": 180 },
-    { "name": "📱 iPhone 14 cassé", "query": "iphone 14 cassé", "maxPrice": 200 },
-    { "name": "📱 iPhone 14 Pro / Pro Max cassé", "query": "iphone 14 pro cassé", "maxPrice": 240 },
-    { "name": "📱 iPhone 15 cassé", "query": "iphone 15 cassé", "maxPrice": 280 },
-    { "name": "📱 iPhone 15 Pro / Pro Max cassé", "query": "iphone 15 pro cassé", "maxPrice": 330 },
-    { "name": "📱 iPhone 16 cassé", "query": "iphone 16 cassé", "maxPrice": 380 },
-    { "name": "📱 iPhone 16 Pro / Pro Max cassé", "query": "iphone 16 pro cassé", "maxPrice": 430 },
-    { "name": "📱 iPhone 17 cassé", "query": "iphone 17 cassé", "maxPrice": 500 },
-    { "name": "📱 iPhone 17 Pro / Pro Max cassé", "query": "iphone 17 pro cassé", "maxPrice": 560 },
-    { "name": "📱 iPhone 18 Pro / Pro Max cassé", "query": "iphone 18 pro cassé", "maxPrice": 650 },
-    { "name": "📱 iPhone cassé (très bas prix)", "query": "iphone cassé", "maxPrice": 60 },
-    { "name": "📱 iPhone HS (très bas prix)", "query": "iphone hs", "maxPrice": 60 },
-    { "name": "📱 iPhone écran cassé", "query": "iphone écran cassé", "maxPrice": 50 },
-    { "name": "🔋 iPhone batterie défectueuse", "query": "iphone batterie défectueuse", "maxPrice": 50 },
-    { "name": "🔙 iPhone dos cassé", "query": "iphone dos cassé", "maxPrice": 60 },
-    { "name": "⚫ iPhone ne s'allume pas", "query": "iphone ne s'allume pas", "maxPrice": 50 },
-    { "name": "🧩 iPhone pour pièces", "query": "iphone pour pièces", "maxPrice": 50 },
-    {
-      "name": "🔒 iPhone bloqué iCloud (bon état)",
-      "query": "iphone bloqué icloud",
-      "maxPrice": 120,
-      "exclude": ["cass", "fissur", "brisé", "hs", "ne s'allume pas"]
-    },
-    {
-      "name": "🔒 iPhone verrouillé iCloud (bon état)",
-      "query": "iphone verrouillé icloud",
-      "maxPrice": 120,
-      "exclude": ["cass", "fissur", "brisé", "hs", "ne s'allume pas"]
-    }
+    { "name": "📱 iPhone XR cassé", "query": "iphone xr cassé", "maxPrice": 40 },
+    { "name": "📱 iPhone XS cassé", "query": "iphone xs cassé", "maxPrice": 40 },
+    { "name": "📱 iPhone XS Max cassé", "query": "iphone xs max cassé", "maxPrice": 50 },
+
+    { "name": "📱 iPhone 11 cassé", "query": "iphone 11 cassé", "maxPrice": 50 },
+    { "name": "📱 iPhone 11 Pro cassé", "query": "iphone 11 pro cassé", "maxPrice": 60 },
+    { "name": "📱 iPhone 11 Pro Max cassé", "query": "iphone 11 pro max cassé", "maxPrice": 70 },
+
+    { "name": "📱 iPhone 12 mini cassé", "query": "iphone 12 mini cassé", "maxPrice": 60 },
+    { "name": "📱 iPhone 12 cassé", "query": "iphone 12 cassé", "maxPrice": 70 },
+    { "name": "📱 iPhone 12 Pro cassé", "query": "iphone 12 pro cassé", "maxPrice": 80 },
+    { "name": "📱 iPhone 12 Pro Max cassé", "query": "iphone 12 pro max cassé", "maxPrice": 90 },
+
+    { "name": "📱 iPhone 13 mini cassé", "query": "iphone 13 mini cassé", "maxPrice": 80 },
+    { "name": "📱 iPhone 13 cassé", "query": "iphone 13 cassé", "maxPrice": 100 },
+    { "name": "📱 iPhone 13 Pro cassé", "query": "iphone 13 pro cassé", "maxPrice": 120 },
+    { "name": "📱 iPhone 13 Pro Max cassé", "query": "iphone 13 pro max cassé", "maxPrice": 130 },
+
+    { "name": "📱 iPhone 14 cassé", "query": "iphone 14 cassé", "maxPrice": 150 },
+    { "name": "📱 iPhone 14 Plus cassé", "query": "iphone 14 plus cassé", "maxPrice": 160 },
+    { "name": "📱 iPhone 14 Pro cassé", "query": "iphone 14 pro cassé", "maxPrice": 170 },
+    { "name": "📱 iPhone 14 Pro Max cassé", "query": "iphone 14 pro max cassé", "maxPrice": 190 },
+
+    { "name": "📱 iPhone 15 cassé", "query": "iphone 15 cassé", "maxPrice": 200 },
+    { "name": "📱 iPhone 15 Plus cassé", "query": "iphone 15 plus cassé", "maxPrice": 210 },
+    { "name": "📱 iPhone 15 Pro cassé", "query": "iphone 15 pro cassé", "maxPrice": 220 },
+    { "name": "📱 iPhone 15 Pro Max cassé", "query": "iphone 15 pro max cassé", "maxPrice": 240 },
+
+    { "name": "📱 iPhone 16 cassé", "query": "iphone 16 cassé", "maxPrice": 260 },
+    { "name": "📱 iPhone 16 Plus cassé", "query": "iphone 16 plus cassé", "maxPrice": 270 },
+    { "name": "📱 iPhone 16 Pro cassé", "query": "iphone 16 pro cassé", "maxPrice": 280 },
+    { "name": "📱 iPhone 16 Pro Max cassé", "query": "iphone 16 pro max cassé", "maxPrice": 300 },
+
+    { "name": "📱 iPhone 17 cassé", "query": "iphone 17 cassé", "maxPrice": 300 },
+    { "name": "📱 iPhone 17 Air cassé", "query": "iphone 17 air cassé", "maxPrice": 300 },
+    { "name": "📱 iPhone 17 Pro cassé", "query": "iphone 17 pro cassé", "maxPrice": 320 },
+    { "name": "📱 iPhone 17 Pro Max cassé", "query": "iphone 17 pro max cassé", "maxPrice": 340 },
+
+    { "name": "📱 iPhone 18 cassé", "query": "iphone 18 cassé", "maxPrice": 350 },
+    { "name": "📱 iPhone 18 Pro cassé", "query": "iphone 18 pro cassé", "maxPrice": 350 },
+    { "name": "📱 iPhone 18 Pro Max cassé", "query": "iphone 18 pro max cassé", "maxPrice": 380 },
+
+    { "name": "📱 iPhone cassé (très bas prix)", "query": "iphone cassé", "maxPrice": 40 },
+    { "name": "📱 iPhone HS (très bas prix)", "query": "iphone hs", "maxPrice": 40 },
+    { "name": "📱 iPhone écran cassé", "query": "iphone écran cassé", "maxPrice": 40 },
+    { "name": "🔋 iPhone batterie défectueuse", "query": "iphone batterie défectueuse", "maxPrice": 40 },
+    { "name": "🔙 iPhone dos cassé", "query": "iphone dos cassé", "maxPrice": 40 },
+    { "name": "⚫ iPhone ne s'allume pas", "query": "iphone ne s'allume pas", "maxPrice": 40 }
   ]
 }
