@@ -59,88 +59,142 @@ async function sendToDiscord(l: Listing, searchName: string, retry = 0): Promise
 // ---------- Vinted (lecture de la page de recherche) ----------
 const UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36";
 const VBASE = "https://www.vinted.fr";
-let cookie = "";
-let cookieAt = 0;
+const jar = new Map<string, string>();
 let blockedUntil = 0;
 
-const pageHeaders = (): Record<string, string> => ({
+const cookieHeader = () => [...jar].map(([k, v]) => `${k}=${v}`).join("; ");
+function storeCookies(res: Response) {
+  for (const c of res.headers.getSetCookie()) {
+    const [pair] = c.split(";");
+    const i = pair.indexOf("=");
+    if (i > 0) jar.set(pair.slice(0, i).trim(), pair.slice(i + 1));
+  }
+}
+const vHeaders = (extra: Record<string, string> = {}): Record<string, string> => ({
   "user-agent": UA,
-  accept: "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
-  "accept-language": "fr-FR,fr;q=0.9,en;q=0.8",
-  "sec-ch-ua": '"Chromium";v="124", "Google Chrome";v="124", "Not-A.Brand";v="99"',
-  "sec-ch-ua-mobile": "?0",
-  "sec-ch-ua-platform": '"Windows"',
-  "sec-fetch-dest": "document",
-  "sec-fetch-mode": "navigate",
-  "sec-fetch-site": "none",
-  "sec-fetch-user": "?1",
-  "upgrade-insecure-requests": "1",
-  ...(cookie ? { cookie } : {}),
+  accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+  "accept-language": "fr-FR,fr;q=0.9",
+  ...(jar.size ? { cookie: cookieHeader() } : {}),
+  ...extra,
 });
 
-async function refreshCookie() {
-  cookie = "";
-  const r = await fetch(VBASE + "/", { headers: pageHeaders() });
-  const set = r.headers.getSetCookie();
-  cookie = set.map((c) => c.split(";")[0]).join("; ");
-  cookieAt = Date.now();
-  console.log(`Vinted accueil : HTTP ${r.status}, ${set.length} cookies`);
+async function refreshSession() {
+  const h = await fetch(VBASE + "/", { headers: vHeaders(), redirect: "manual" });
+  storeCookies(h);
+  await h.text();
+  const r = await fetch(VBASE + "/web/api/auth/refresh", {
+    method: "POST",
+    headers: vHeaders({ accept: "application/json", "content-type": "application/json", origin: VBASE, referer: VBASE + "/" }),
+    body: "{}",
+    redirect: "manual",
+  });
+  storeCookies(r);
+  await r.text();
+  console.log(`Vinted session rafraîchie : HTTP ${r.status}`);
 }
 
+async function getCatalogHtml(u: URL): Promise<string> {
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const r = await fetch(u, { headers: vHeaders(), redirect: "manual" });
+    storeCookies(r);
+    if (r.status === 403 || r.status === 429) {
+      blockedUntil = Date.now() + 5 * 60_000;
+      throw new Error(`Vinted bloque (HTTP ${r.status})`);
+    }
+    if (r.status >= 300 && r.status < 400) {
+      await refreshSession();
+      continue;
+    }
+    if (!r.ok) throw new Error(`Vinted HTTP ${r.status}`);
+    const html = await r.text();
+    if (/<title>\s*Session refresh/i.test(html)) {
+      await refreshSession();
+      continue;
+    }
+    return html;
+  }
+  throw new Error("Vinted : session non valide");
+}
+
+const decode = (s: string) =>
+  s.replace(/&amp;/g, "&").replace(/&quot;/g, '"').replace(/&#39;|&apos;/g, "'").replace(/&nbsp;/g, " ").replace(/&lt;/g, "<").replace(/&gt;/g, ">");
 const SP = "(?:\\s|\\u00a0|\\u202f|&nbsp;|&#160;|&#8239;)*";
 const PRICE_RE = new RegExp("(\\d{1,5}(?:[.,]\\d{1,2})?)" + SP + "(?:€|&euro;|&#8364;)");
 const STATE_RE = /(Neuf avec étiquette|Neuf sans étiquette|Très bon état|Bon état|Satisfaisant)/i;
+const IMG_RE = /https:\/\/images\d*\.vinted\.net\/[^"'\s)<>\\]+/;
 
 function parseCatalog(html: string): Listing[] {
-  const found: { id: string; slug: string; idx: number }[] = [];
+  const out: Listing[] = [];
   const ids = new Set<string>();
+
+  // 1) Cartes de la page (liens <a href="/items/123-titre">)
+  const anchors: { id: string; slug: string; idx: number; tag: string }[] = [];
+  const reA = /<a\b[^>]*?href=["'](?:https:\/\/www\.vinted\.fr)?\/items\/(\d{6,})-([a-z0-9-]*)[^"']*["'][^>]*>/g;
+  for (const m of html.matchAll(reA)) {
+    if (ids.has(m[1])) continue;
+    ids.add(m[1]);
+    anchors.push({ id: m[1], slug: m[2], idx: m.index ?? 0, tag: m[0] });
+  }
+  if (anchors.length >= 3) {
+    anchors.forEach((a, i) => {
+      const end = Math.min(anchors[i + 1]?.idx ?? a.idx + 6000, a.idx + 6000);
+      const seg = html.slice(a.idx, end);
+      const p = seg.match(PRICE_RE);
+      if (!p) return;
+      const attr = a.tag.match(/title=["']([^"']{3,300})["']/);
+      const img = seg.match(IMG_RE);
+      const st = seg.match(STATE_RE);
+      out.push({
+        id: `vinted:${a.id}`,
+        source: "vinted",
+        title: attr ? decode(attr[1]) : a.slug.replace(/-/g, " "),
+        price: Number(p[1].replace(",", ".")),
+        currency: "EUR",
+        url: `${VBASE}/items/${a.id}-${a.slug}`,
+        image: img?.[0],
+        extra: st?.[1],
+      });
+    });
+    if (out.length) return out;
+  }
+
+  // 2) Secours : données JSON de la page
+  ids.clear();
   for (const m of html.matchAll(/\/items\/(\d{6,})-([a-z0-9-]*)/g)) {
     if (ids.has(m[1])) continue;
     ids.add(m[1]);
-    found.push({ id: m[1], slug: m[2], idx: m.index ?? 0 });
-  }
-  const out: Listing[] = [];
-  found.forEach((f, i) => {
-    const end = Math.min(found[i + 1]?.idx ?? f.idx + 5000, f.idx + 5000);
-    const seg = html.slice(f.idx, end);
-    const jsonPrice = seg.match(/"amount"\s*:\s*"?(\d+(?:\.\d+)?)/);
-    const htmlPrice = seg.match(PRICE_RE);
-    const raw = jsonPrice?.[1] ?? htmlPrice?.[1];
-    if (!raw) return;
-    const jsonTitle = seg.match(/"title"\s*:\s*"([^"]{3,200})"/);
-    const img = seg.match(/https:\/\/images\d*\.vinted\.net\/[^"'\s)<>\\]+/);
-    const state = seg.match(STATE_RE);
+    const idx = m.index ?? 0;
+    const win = html.slice(Math.max(0, idx - 1500), idx + 300).replace(/\\"/g, '"');
+    const all = [...win.matchAll(/"amount"\s*:\s*"?(\d+(?:\.\d+)?)/g)];
+    if (!all.length) continue;
+    const t = win.match(/"title"\s*:\s*"([^"]{3,200})"/g);
+    const lastTitle = t ? t[t.length - 1].replace(/^"title"\s*:\s*"/, "").replace(/"$/, "") : undefined;
     out.push({
-      id: `vinted:${f.id}`,
+      id: `vinted:${m[1]}`,
       source: "vinted",
-      title: jsonTitle?.[1] ?? f.slug.replace(/-/g, " "),
-      price: Number(raw.replace(",", ".")),
+      title: lastTitle ?? m[2].replace(/-/g, " "),
+      price: Number(all[all.length - 1][1]),
       currency: "EUR",
-      url: `${VBASE}/items/${f.id}-${f.slug}`,
-      image: img?.[0],
-      extra: state?.[1],
+      url: `${VBASE}/items/${m[1]}-${m[2]}`,
+      image: win.match(IMG_RE)?.[0],
     });
-  });
+  }
   return out;
 }
 
 async function searchVinted(query: string, maxPrice?: number): Promise<Listing[]> {
   if (Date.now() < blockedUntil) throw new Error("en pause (Vinted bloque), nouvel essai plus tard");
-  if (!cookie || Date.now() - cookieAt > 20 * 60_000) await refreshCookie();
   const u = new URL(VBASE + "/catalog");
   u.searchParams.set("search_text", query);
   u.searchParams.set("order", "newest_first");
   if (maxPrice) u.searchParams.set("price_to", String(maxPrice));
-  const r = await fetch(u, { headers: { ...pageHeaders(), referer: VBASE + "/" } });
-  if (!r.ok) {
-    if (r.status === 403 || r.status === 429) {
-      blockedUntil = Date.now() + 5 * 60_000;
-      console.error(`Vinted bloque (HTTP ${r.status})`);
-    }
-    throw new Error(`Vinted HTTP ${r.status}`);
-  }
-  const items = parseCatalog(await r.text());
+  const html = await getCatalogHtml(u);
+  const items = parseCatalog(html);
   console.log(`🔎 ${query} : ${items.length} annonces lues`);
+  if (items.length === 0) {
+    const k = html.indexOf("/items/");
+    console.error("Aucune annonce lisible. Extrait :", html.slice(Math.max(0, k - 150), k + 450).replace(/\s+/g, " "));
+  }
   return items;
 }
 
