@@ -20,6 +20,21 @@ const config = JSON.parse(readFileSync("config.json", "utf8")) as {
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 const norm = (s: string) => s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
 
+// ---------- Plafonds par modèle (lus dans config.json) ----------
+const MODEL_RE = /iphone\s*(xs\s*max|xr|xs|1[1-8])\s*(pro\s*max|pro|plus|mini|air)?/;
+const modelKey = (t: string): string | null => {
+  const m = t.match(MODEL_RE);
+  return m ? `${m[1]} ${m[2] ?? ""}`.replace(/\s+/g, " ").trim() : null;
+};
+const modelCap = new Map<string, number>();
+for (const s of config.searches) {
+  if (!s.maxPrice) continue;
+  const k = modelKey(norm(s.query));
+  if (k) modelCap.set(k, s.maxPrice);
+}
+const UNKNOWN_MODEL_CAP = 60;
+console.log(`Plafonds par modèle chargés : ${modelCap.size}`);
+
 const SEEN_FILE = "seen.json";
 const wasEmpty = !existsSync(SEEN_FILE);
 const seen = new Set<string>(wasEmpty ? [] : JSON.parse(readFileSync(SEEN_FILE, "utf8")));
@@ -205,6 +220,7 @@ async function searchVinted(query: string, maxPrice?: number): Promise<Listing[]
 }
 
 // ---------- eBay (optionnel) ----------
+const EBAY_ENABLED = Boolean(process.env.EBAY_CLIENT_ID && process.env.EBAY_CLIENT_SECRET);
 let token = "";
 let tokenExp = 0;
 
@@ -224,7 +240,7 @@ async function ebayToken(): Promise<string> {
 }
 
 async function searchEbay(query: string, maxPrice?: number): Promise<Listing[]> {
-  if (!process.env.EBAY_CLIENT_ID || !process.env.EBAY_CLIENT_SECRET) return [];
+  if (!EBAY_ENABLED) return [];
   const u = new URL("https://api.ebay.com/buy/browse/v1/item_summary/search");
   u.searchParams.set("q", query);
   u.searchParams.set("sort", "newlyListed");
@@ -255,8 +271,27 @@ const MIN_PRIX = 15; // en dessous : presque toujours un accessoire
 const allowed = (l: Listing, s: Search) => {
   const t = norm(l.title);
   if (!t.includes("iphone")) return false; // uniquement des iPhone
+
+  // Modèles trop anciens (4 à 8, X, SE)
+  if (/iphone\s*[4-9](?![0-9])/.test(t) || /iphone\s*x(?![rs])/.test(t) || /iphone\s*se/.test(t)) return false;
+
+  // Pas de téléphones neufs
+  if (norm(l.extra ?? "").includes("neuf")) return false;
+
   if (l.price < MIN_PRIX) return false;
-  if (s.maxPrice && l.price > s.maxPrice) return false;
+
+  // Plafond : le plus bas entre la recherche et le modèle réellement détecté dans le titre
+  const k = modelKey(t);
+  const caps: number[] = [];
+  if (s.maxPrice) caps.push(s.maxPrice);
+  if (k) {
+    const c = modelCap.get(k);
+    if (c) caps.push(c);
+  } else {
+    caps.push(UNKNOWN_MODEL_CAP);
+  }
+  if (caps.length && l.price > Math.min(...caps)) return false;
+
   return ![...config.exclude, ...(s.exclude ?? [])].some((w) => t.includes(norm(w)));
 };
 
@@ -264,7 +299,7 @@ async function cycle(silent: boolean) {
   for (const s of config.searches) {
     const sources = [
       { name: "vinted", run: () => searchVinted(s.query, s.maxPrice) },
-      { name: "ebay", run: () => searchEbay(s.query, s.maxPrice) },
+      ...(EBAY_ENABLED ? [{ name: "ebay", run: () => searchEbay(s.query, s.maxPrice) }] : []),
     ];
     for (const src of sources) {
       try {
