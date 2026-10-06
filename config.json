@@ -1,14 +1,11 @@
 {
   "intervalSeconds": 30,
   "exclude": [
-    "coque", "protection", "verre trempé", "vitre de protection", "étui", "housse", "chargeur", "câble", "boîte vide", "boite vide", "factice", "maquette",
-    "objectif", "lentille", "protecteur", "protège", "film", "pochette", "adaptateur", "airpods", "écouteur", "montre", "bracelet",
-    "t-shirt", "pull", "jean", "short", "veste", "robe", "pantalon", "sweat", "chemise", "manteau",
-    "écran de remplacement", "kit", "outil", "nappe",
     "icloud", "pour pièces", "pour pieces", "pièces détachées", "pieces detachees",
-    "samsung", "galaxy", "xiaomi", "redmi", "huawei", "oppo", "realme", "pixel", "android", "oneplus", "honor",
-    "boîte seule", "boite seule", "boîte d'iphone", "boite d'iphone", "boîte d’iphone", "boite d’iphone", "boîte iphone", "boite iphone", "boîte apple", "boite apple", "boîte de l'iphone", "boite de l'iphone",
-    "pour iphone", "compatible", "haut-parleur", "écran iphone", "batterie iphone", "batterie pour", "tiroir sim", "connecteur"
+    "boîte seule", "boite seule", "boîte vide", "boite vide", "boîte d'iphone", "boite d'iphone", "boîte d’iphone", "boite d’iphone", "boîte iphone", "boite iphone", "boîte apple", "boite apple",
+    "pour iphone", "compatible", "écran iphone", "batterie iphone", "batterie pour", "écran de remplacement", "tiroir sim", "connecteur", "nappe",
+    "factice", "maquette", "airpods", "écouteur", "montre", "bracelet",
+    "samsung", "galaxy", "xiaomi", "redmi", "huawei", "oppo", "realme", "pixel", "android", "oneplus", "honor"
   ],
   "searches": [
     { "name": "📱 iPhone XR", "query": "iphone xr", "maxPrice": 55 },
@@ -53,11 +50,8 @@
     { "name": "📱 iPhone 18 Pro", "query": "iphone 18 pro", "maxPrice": 395 },
     { "name": "📱 iPhone 18 Pro Max", "query": "iphone 18 pro max", "maxPrice": 415 },
 
+    { "name": "🆕 Tous les iPhone récents", "query": "iphone", "maxPrice": 120 },
     { "name": "📞 iPhone cassé", "query": "iphone cassé", "maxPrice": 100 },
-    { "name": "📞 iPhone HS", "query": "iphone hs", "maxPrice": 100 },
-    { "name": "📞 iPhone ne s'allume pas", "query": "iphone ne s'allume pas", "maxPrice": 100 },
-    { "name": "📞 iPhone en panne", "query": "iphone en panne", "maxPrice": 100 },
-    { "name": "📞 iPhone écran cassé", "query": "iphone écran cassé", "maxPrice": 100 },
-    { "name": "📞 iPhone dos cassé", "query": "iphone dos cassé", "maxPrice": 100 }
+    { "name": "📞 iPhone HS", "query": "iphone hs", "maxPrice": 100 }
   ]
 }
