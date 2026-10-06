@@ -36,8 +36,7 @@ const UNKNOWN_MODEL_CAP = 60;
 console.log(`Plafonds par modèle chargés : ${modelCap.size}`);
 
 const SEEN_FILE = "seen.json";
-const wasEmpty = !existsSync(SEEN_FILE);
-const seen = new Set<string>(wasEmpty ? [] : JSON.parse(readFileSync(SEEN_FILE, "utf8")));
+const seen = new Set<string>(existsSync(SEEN_FILE) ? JSON.parse(readFileSync(SEEN_FILE, "utf8")) : []);
 const saveSeen = () => writeFileSync(SEEN_FILE, JSON.stringify([...seen].slice(-8000)));
 const rejected = new Set<string>();
 
@@ -78,6 +77,7 @@ async function sendToDiscord(l: Listing, searchName: string, retry = 0): Promise
 // ---------- Vinted (lecture de la page de recherche) ----------
 const UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36";
 const VBASE = "https://www.vinted.fr";
+const PHONES_CATALOG = "3661"; // catégorie Vinted « Téléphones portables »
 const jar = new Map<string, string>();
 let blockedUntil = 0;
 
@@ -208,6 +208,7 @@ async function searchVinted(query: string, maxPrice?: number): Promise<Listing[]
   if (Date.now() < blockedUntil) throw new Error("en pause (Vinted bloque), nouvel essai plus tard");
   const u = new URL(VBASE + "/catalog");
   u.searchParams.set("search_text", query);
+  u.searchParams.set("catalog[]", PHONES_CATALOG); // uniquement la catégorie téléphones
   u.searchParams.set("order", "newest_first");
   if (maxPrice) u.searchParams.set("price_to", String(maxPrice));
   const html = await getCatalogHtml(u);
@@ -267,10 +268,10 @@ async function searchEbay(query: string, maxPrice?: number): Promise<Listing[]> 
 }
 
 // ---------- Filtres ----------
-const MIN_PRIX = 20; // en dessous : presque toujours un accessoire
+const MIN_PRIX = 20;
 
-// Pièces détachées : on regarde seulement le DÉBUT du titre
-const PART_START = /^(ecran|batterie|boite|boitier|vitre|dalle|lcd|oled|camera|chassis|facade|nappe|connecteur|haut|ensemble|kit|lot|pack|piece|support|protection|coque|verre|cable|chargeur|bouton|capot|vibreur|tiroir|face id)/;
+// Pièces et accessoires : on regarde seulement le DÉBUT du titre (toutes langues)
+const PART_START = /^(ecran|batterie|boite|boitier|vitre|dalle|lcd|oled|camera|chassis|facade|nappe|connecteur|haut|ensemble|kit|lot|pack|piece|support|protection|coque|verre|cable|chargeur|bouton|capot|vibreur|tiroir|face id|case|hulle|funda|custodia|hoesje|capa|cover|etui|housse|skin|panzer|protector|kabel|glass|film|pochette|cargador|bumper|folio)/;
 
 // Retourne la raison du refus, ou null si l'annonce est acceptée
 const refusal = (l: Listing, s: Search): string | null => {
@@ -281,7 +282,7 @@ const refusal = (l: Listing, s: Search): string | null => {
   if (/iphone\s*[4-9](?![0-9])/.test(title) || /iphone\s*x(?![rs])/.test(title) || /iphone\s*se/.test(title)) {
     return "modèle trop ancien";
   }
-  if (PART_START.test(title)) return "pièce détachée";
+  if (PART_START.test(title)) return "pièce ou accessoire";
   if (norm(l.extra ?? "").includes("neuf")) return "téléphone neuf";
   if (l.price < MIN_PRIX) return `prix trop bas (${l.price}€)`;
 
@@ -333,7 +334,7 @@ async function cycle(silent: boolean) {
       } catch (e) {
         console.error(`[${src.name}] "${s.query}" :`, (e as Error).message);
       }
-      await sleep(1500);
+      await sleep(3000);
     }
   }
   saveSeen();
@@ -349,7 +350,8 @@ try {
   console.error("Discord :", (e as Error).message);
 }
 
-await cycle(wasEmpty);
+await cycle(true); // premier tour silencieux : il mémorise l'existant
+console.log("✅ Premier tour terminé : les nouvelles annonces arrivent maintenant sur Discord");
 while (true) {
   await sleep(Math.max(config.intervalSeconds, 15) * 1000);
   await cycle(false);
