@@ -39,6 +39,7 @@ const SEEN_FILE = "seen.json";
 const wasEmpty = !existsSync(SEEN_FILE);
 const seen = new Set<string>(wasEmpty ? [] : JSON.parse(readFileSync(SEEN_FILE, "utf8")));
 const saveSeen = () => writeFileSync(SEEN_FILE, JSON.stringify([...seen].slice(-8000)));
+const rejected = new Set<string>();
 
 const COLORS = { vinted: 0x09b1ba, ebay: 0xe53238 } as const;
 
@@ -265,23 +266,28 @@ async function searchEbay(query: string, maxPrice?: number): Promise<Listing[]> 
   }));
 }
 
-// ---------- Boucle principale ----------
-const MIN_PRIX = 15; // en dessous : presque toujours un accessoire
+// ---------- Filtres ----------
+const MIN_PRIX = 20; // en dessous : presque toujours un accessoire
 
-const allowed = (l: Listing, s: Search) => {
+// Pièces détachées : on regarde seulement le DÉBUT du titre
+const PART_START = /^(ecran|batterie|boite|boitier|vitre|dalle|lcd|oled|camera|chassis|facade|nappe|connecteur|haut|ensemble|kit|lot|pack|piece|support|protection|coque|verre|cable|chargeur|bouton|capot|vibreur|tiroir|face id)/;
+
+// Retourne la raison du refus, ou null si l'annonce est acceptée
+const refusal = (l: Listing, s: Search): string | null => {
   const t = norm(l.title);
-  if (!t.includes("iphone")) return false; // uniquement des iPhone
+  const title = t.split(/,\s*marque\s*:/)[0].trim(); // titre réel de l'annonce
+  if (!t.includes("iphone")) return "pas un iPhone";
 
-  // Modèles trop anciens (4 à 8, X, SE)
-  if (/iphone\s*[4-9](?![0-9])/.test(t) || /iphone\s*x(?![rs])/.test(t) || /iphone\s*se/.test(t)) return false;
+  if (/iphone\s*[4-9](?![0-9])/.test(title) || /iphone\s*x(?![rs])/.test(title) || /iphone\s*se/.test(title)) {
+    return "modèle trop ancien";
+  }
+  if (PART_START.test(title)) return "pièce détachée";
+  if (norm(l.extra ?? "").includes("neuf")) return "téléphone neuf";
+  if (l.price < MIN_PRIX) return `prix trop bas (${l.price}€)`;
 
-  // Pas de téléphones neufs
-  if (norm(l.extra ?? "").includes("neuf")) return false;
-
-  if (l.price < MIN_PRIX) return false;
-
-  // Plafond : le plus bas entre la recherche et le modèle réellement détecté dans le titre
-  const k = modelKey(t);
+  // Plafond : le plus bas entre la recherche et le modèle réellement détecté
+  const mf = t.match(/modele\s*:\s*([^,]+)/);
+  const k = modelKey(title) ?? (mf ? modelKey(mf[1]) : null);
   const caps: number[] = [];
   if (s.maxPrice) caps.push(s.maxPrice);
   if (k) {
@@ -290,11 +296,15 @@ const allowed = (l: Listing, s: Search) => {
   } else {
     caps.push(UNKNOWN_MODEL_CAP);
   }
-  if (caps.length && l.price > Math.min(...caps)) return false;
+  const cap = Math.min(...caps);
+  if (l.price > cap) return `trop cher (${l.price}€ > ${cap}€)`;
 
-  return ![...config.exclude, ...(s.exclude ?? [])].some((w) => t.includes(norm(w)));
+  const bad = [...config.exclude, ...(s.exclude ?? [])].find((w) => title.includes(norm(w)));
+  if (bad) return `mot exclu « ${bad} »`;
+  return null;
 };
 
+// ---------- Boucle principale ----------
 async function cycle(silent: boolean) {
   for (const s of config.searches) {
     const sources = [
@@ -306,7 +316,14 @@ async function cycle(silent: boolean) {
         const items = (await src.run()).reverse();
         for (const l of items) {
           if (seen.has(l.id)) continue;
-          if (!allowed(l, s)) continue;
+          const why = refusal(l, s);
+          if (why) {
+            if (!rejected.has(l.id)) {
+              rejected.add(l.id);
+              if (!silent) console.log(`🚫 ${why} | ${l.price}€ | ${l.title.slice(0, 70)}`);
+            }
+            continue;
+          }
           seen.add(l.id);
           if (silent) continue;
           await sendToDiscord(l, s.name);
@@ -316,7 +333,7 @@ async function cycle(silent: boolean) {
       } catch (e) {
         console.error(`[${src.name}] "${s.query}" :`, (e as Error).message);
       }
-      await sleep(2500);
+      await sleep(1500);
     }
   }
   saveSeen();
@@ -334,6 +351,6 @@ try {
 
 await cycle(wasEmpty);
 while (true) {
-  await sleep(Math.max(config.intervalSeconds, 90) * 1000);
+  await sleep(Math.max(config.intervalSeconds, 15) * 1000);
   await cycle(false);
 }
