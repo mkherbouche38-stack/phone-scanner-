@@ -15,6 +15,16 @@ interface Search { name: string; query: string; maxPrice?: number; exclude?: str
 
 const config = JSON.parse(readFileSync("config.json", "utf8")) as {
   intervalSeconds: number; exclude: string[]; searches: Search[];
+  fast?: { enabled?: boolean; query?: string; everySeconds?: number; priceTo?: number; domains?: string[] };
+};
+// ⚡ Mode rapide : UNE recherche large « iphone » (plus récentes d'abord) relue toutes les quelques secondes.
+// Chaque nouvelle annonce passe ensuite par les mêmes filtres et les mêmes plafonds par modèle qu'avant.
+const FAST = {
+  enabled: config.fast?.enabled ?? true,
+  query: config.fast?.query ?? "iphone",
+  everySeconds: Math.max(config.fast?.everySeconds ?? 8, 5),
+  priceTo: config.fast?.priceTo ?? Math.max(...config.searches.map((x) => x.maxPrice ?? 0), 100),
+  domains: (config.fast?.domains?.length ? config.fast.domains : ["www.vinted.fr"]).map((d) => d.replace(/^https?:\/\//, "").replace(/\/$/, "")),
 };
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
@@ -74,64 +84,76 @@ async function sendToDiscord(l: Listing, searchName: string, retry = 0): Promise
   if (!r.ok) throw new Error(`Discord HTTP ${r.status}`);
 }
 
-// ---------- Vinted (lecture de la page de recherche) ----------
+// ---------- Vinted (lecture de la page de recherche, plusieurs pays possibles) ----------
 const UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36";
 const VBASE = "https://www.vinted.fr";
 const PHONES_CATALOG = "3661"; // catégorie Vinted « Téléphones portables »
-const jar = new Map<string, string>();
-let blockedUntil = 0;
 
-const cookieHeader = () => [...jar].map(([k, v]) => `${k}=${v}`).join("; ");
+// Une session (cookies + pause) par pays
+interface VSession { base: string; jar: Map<string, string>; blockedUntil: number; strikes: number }
+const sessions = new Map<string, VSession>();
+const sessionFor = (host: string): VSession => {
+  let v = sessions.get(host);
+  if (!v) { v = { base: `https://${host}`, jar: new Map(), blockedUntil: 0, strikes: 0 }; sessions.set(host, v); }
+  return v;
+};
+const countryOf = (base: string) => base.split(".").pop()!.toUpperCase();
 
-function storeCookies(res: Response) {
+function storeCookies(v: VSession, res: Response) {
   for (const c of res.headers.getSetCookie()) {
     const [pair] = c.split(";");
     const i = pair.indexOf("=");
-    if (i > 0) jar.set(pair.slice(0, i).trim(), pair.slice(i + 1));
+    if (i > 0) v.jar.set(pair.slice(0, i).trim(), pair.slice(i + 1));
   }
 }
 
-const vHeaders = (extra: Record<string, string> = {}): Record<string, string> => ({
+const vHeaders = (v: VSession, extra: Record<string, string> = {}): Record<string, string> => ({
   "user-agent": UA,
   accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-  "accept-language": "fr-FR,fr;q=0.9",
-  ...(jar.size ? { cookie: cookieHeader() } : {}),
+  "accept-language": "fr-FR,fr;q=0.9,en;q=0.7",
+  "cache-control": "no-cache",
+  ...(v.jar.size ? { cookie: [...v.jar].map(([k, val]) => `${k}=${val}`).join("; ") } : {}),
   ...extra,
 });
 
-async function refreshSession() {
-  const h = await fetch(VBASE + "/", { headers: vHeaders(), redirect: "manual" });
-  storeCookies(h);
+async function refreshSession(v: VSession) {
+  const h = await fetch(v.base + "/", { headers: vHeaders(v), redirect: "manual" });
+  storeCookies(v, h);
   await h.text();
-  const r = await fetch(VBASE + "/web/api/auth/refresh", {
+  const r = await fetch(v.base + "/web/api/auth/refresh", {
     method: "POST",
-    headers: vHeaders({ accept: "application/json", "content-type": "application/json", origin: VBASE, referer: VBASE + "/" }),
+    headers: vHeaders(v, { accept: "application/json", "content-type": "application/json", origin: v.base, referer: v.base + "/" }),
     body: "{}",
     redirect: "manual",
   });
-  storeCookies(r);
+  storeCookies(v, r);
   await r.text();
-  console.log(`Vinted session rafraîchie : HTTP ${r.status}`);
+  console.log(`Vinted ${countryOf(v.base)} session rafraîchie : HTTP ${r.status}`);
 }
 
-async function getCatalogHtml(u: URL): Promise<string> {
+async function getCatalogHtml(v: VSession, u: URL): Promise<string> {
   for (let attempt = 0; attempt < 3; attempt++) {
-    const r = await fetch(u, { headers: vHeaders(), redirect: "manual" });
-    storeCookies(r);
+    const r = await fetch(u, { headers: vHeaders(v), redirect: "manual" });
+    storeCookies(v, r);
     if (r.status === 403 || r.status === 429) {
-      blockedUntil = Date.now() + 5 * 60_000;
-      throw new Error(`Vinted bloque (HTTP ${r.status})`);
+      // pause progressive : 1 min, 2 min, 5 min, puis 10 min
+      v.strikes++;
+      const mins = [1, 2, 5, 10][Math.min(v.strikes - 1, 3)];
+      v.blockedUntil = Date.now() + mins * 60_000;
+      v.jar.clear();
+      throw new Error(`Vinted ${countryOf(v.base)} bloque (HTTP ${r.status}) : pause ${mins} min`);
     }
     if (r.status >= 300 && r.status < 400) {
-      await refreshSession();
+      await refreshSession(v);
       continue;
     }
     if (!r.ok) throw new Error(`Vinted HTTP ${r.status}`);
     const html = await r.text();
     if (/<title>\s*Session refresh/i.test(html)) {
-      await refreshSession();
+      await refreshSession(v);
       continue;
     }
+    v.strikes = 0;
     return html;
   }
   throw new Error("Vinted : session non valide");
@@ -142,16 +164,16 @@ const decode = (s: string) =>
 
 const SP = "(?:\\s|\\u00a0|\\u202f|&nbsp;|&#160;|&#8239;)*";
 const PRICE_RE = new RegExp("(\\d{1,5}(?:[.,]\\d{1,2})?)" + SP + "(?:€|&euro;|&#8364;)");
-const STATE_RE = /(Neuf avec étiquette|Neuf sans étiquette|Très bon état|Bon état|Satisfaisant)/i;
+const STATE_RE = /(Neuf avec étiquette|Neuf sans étiquette|Très bon état|Bon état|Satisfaisant|Nuevo|Nuovo|Neu|Nieuw)/i;
 const IMG_RE = /https:\/\/images\d*\.vinted\.net\/[^"'\s)<>\\]+/;
 
-function parseCatalog(html: string): Listing[] {
+function parseCatalog(html: string, base = VBASE): Listing[] {
   const out: Listing[] = [];
   const ids = new Set<string>();
 
   // 1) Cartes de la page (liens <a href="/items/123-titre">)
   const anchors: { id: string; slug: string; idx: number; tag: string }[] = [];
-  const reA = /<a\b[^>]*?href=["'](?:https:\/\/www\.vinted\.fr)?\/items\/(\d{6,})-([a-z0-9-]*)[^"']*["'][^>]*>/g;
+  const reA = /<a\b[^>]*?href=["'](?:https:\/\/www\.vinted\.[a-z.]+)?\/items\/(\d{6,})-([a-z0-9-]*)[^"']*["'][^>]*>/g;
   for (const m of html.matchAll(reA)) {
     if (ids.has(m[1])) continue;
     ids.add(m[1]);
@@ -172,7 +194,7 @@ function parseCatalog(html: string): Listing[] {
         title: attr ? decode(attr[1]) : a.slug.replace(/-/g, " "),
         price: Number(p[1].replace(",", ".")),
         currency: "EUR",
-        url: `${VBASE}/items/${a.id}-${a.slug}`,
+        url: `${base}/items/${a.id}-${a.slug}`,
         image: img?.[0],
         extra: st?.[1],
       });
@@ -197,23 +219,27 @@ function parseCatalog(html: string): Listing[] {
       title: lastTitle ?? m[2].replace(/-/g, " "),
       price: Number(all[all.length - 1][1]),
       currency: "EUR",
-      url: `${VBASE}/items/${m[1]}-${m[2]}`,
+      url: `${base}/items/${m[1]}-${m[2]}`,
       image: win.match(IMG_RE)?.[0],
     });
   }
   return out;
 }
 
-async function searchVinted(query: string, maxPrice?: number): Promise<Listing[]> {
-  if (Date.now() < blockedUntil) throw new Error("en pause (Vinted bloque), nouvel essai plus tard");
-  const u = new URL(VBASE + "/catalog");
+async function searchVinted(query: string, maxPrice?: number, host = "www.vinted.fr", page = 1, quiet = false): Promise<Listing[]> {
+  const v = sessionFor(host);
+  if (Date.now() < v.blockedUntil) throw new Error(`en pause (Vinted ${countryOf(v.base)} bloque), nouvel essai dans ${Math.ceil((v.blockedUntil - Date.now()) / 1000)} s`);
+  const u = new URL(v.base + "/catalog");
   u.searchParams.set("search_text", query);
   u.searchParams.set("catalog[]", PHONES_CATALOG); // uniquement la catégorie téléphones
   u.searchParams.set("order", "newest_first");
+  u.searchParams.set("per_page", "96");
+  if (page > 1) u.searchParams.set("page", String(page));
+  u.searchParams.set("time", String(Math.floor(Date.now() / 1000))); // évite les pages en cache
   if (maxPrice) u.searchParams.set("price_to", String(maxPrice));
-  const html = await getCatalogHtml(u);
-  const items = parseCatalog(html);
-  console.log(`🔎 ${query} : ${items.length} annonces lues`);
+  const html = await getCatalogHtml(v, u);
+  const items = parseCatalog(html, v.base);
+  if (!quiet) console.log(`🔎 ${countryOf(v.base)} ${query}${page > 1 ? ` p${page}` : ""} : ${items.length} annonces lues`);
   if (items.length === 0) {
     const k = html.indexOf("/items/");
     console.error("Aucune annonce lisible. Extrait :", html.slice(Math.max(0, k - 150), k + 450).replace(/\s+/g, " "));
@@ -305,54 +331,105 @@ const refusal = (l: Listing, s: Search): string | null => {
   return null;
 };
 
-// ---------- Boucle principale ----------
-async function cycle(silent: boolean) {
-  for (const s of config.searches) {
-    const sources = [
-      { name: "vinted", run: () => searchVinted(s.query, s.maxPrice) },
-      ...(EBAY_ENABLED ? [{ name: "ebay", run: () => searchEbay(s.query, s.maxPrice) }] : []),
-    ];
-    for (const src of sources) {
-      try {
-        const items = (await src.run()).reverse();
-        for (const l of items) {
-          if (seen.has(l.id)) continue;
-          const why = refusal(l, s);
-          if (why) {
-            if (!rejected.has(l.id)) {
-              rejected.add(l.id);
-              if (!silent) console.log(`🚫 ${why} | ${l.price}€ | ${l.title.slice(0, 70)}`);
-            }
-            continue;
-          }
-          seen.add(l.id);
-          if (silent) continue;
-          await sendToDiscord(l, s.name);
-          console.log(`➡️ ${l.source} | ${l.price}€ | ${l.title}`);
-          await sleep(1200);
-        }
-      } catch (e) {
-        console.error(`[${src.name}] "${s.query}" :`, (e as Error).message);
+// ---------- Envoi ----------
+let sentTotal = 0;
+async function handle(items: Listing[], s: Search, silent: boolean): Promise<number> {
+  let fresh = 0;
+  for (const l of items.reverse()) {
+    if (seen.has(l.id)) continue;
+    fresh++;
+    const why = refusal(l, s);
+    if (why) {
+      if (!rejected.has(l.id)) {
+        rejected.add(l.id);
+        if (!silent) console.log(`🚫 ${why} | ${l.price}€ | ${l.title.slice(0, 70)}`);
       }
-      await sleep(3000);
+      continue;
+    }
+    seen.add(l.id);
+    if (silent) continue;
+    try {
+      await sendToDiscord(l, s.name);
+      sentTotal++;
+      console.log(`➡️ ${l.source} | ${l.price}€ | ${l.title}`);
+    } catch (e) {
+      seen.delete(l.id); // on réessaiera au prochain passage
+      console.error("Discord :", (e as Error).message);
+    }
+    await sleep(700);
+  }
+  return fresh;
+}
+
+// ⚡ Flux rapide : toutes les nouvelles annonces iPhone, tous pays configurés
+const FAST_SEARCH: Search = { name: "⚡ Nouvelle annonce", query: FAST.query };
+async function fastTick(silent: boolean) {
+  for (const host of FAST.domains) {
+    try {
+      const items = await searchVinted(FAST.query, FAST.priceTo, host, 1, true);
+      const fresh = await handle(items, { ...FAST_SEARCH, name: `⚡ Nouvelle annonce ${countryOf(host)}` }, silent);
+      // Beaucoup de nouveautés d'un coup : on lit aussi la page 2 pour ne rien rater
+      if (!silent && fresh >= 80) {
+        await sleep(1500);
+        await handle(await searchVinted(FAST.query, FAST.priceTo, host, 2, true), FAST_SEARCH, silent);
+      }
+    } catch (e) {
+      console.error(`[⚡ ${countryOf(host)}] :`, (e as Error).message);
+    }
+    if (FAST.domains.length > 1) await sleep(1500);
+  }
+}
+
+// 🐢 Filet de sécurité : les recherches par modèle de config.json, une seule par tour
+let slowIdx = 0;
+const slowReady = new Set<number>(); // le 1er passage de chaque recherche est silencieux
+async function slowStep(silentAll: boolean) {
+  const i = slowIdx++ % config.searches.length;
+  const s = config.searches[i];
+  const silent = silentAll || !slowReady.has(i);
+  slowReady.add(i);
+  const sources = [
+    { name: "vinted", run: () => searchVinted(s.query, s.maxPrice, "www.vinted.fr", 1, true) },
+    ...(EBAY_ENABLED ? [{ name: "ebay", run: () => searchEbay(s.query, s.maxPrice) }] : []),
+  ];
+  for (const src of sources) {
+    try {
+      await handle(await src.run(), s, silent);
+    } catch (e) {
+      console.error(`[${src.name}] "${s.query}" :`, (e as Error).message);
     }
   }
-  saveSeen();
 }
 
 console.log("📡 Phone Scanner démarré");
 try {
   await sendToDiscord(
-    { id: "start", source: "vinted", title: "✅ Phone Scanner est en ligne", price: 0, currency: "EUR", url: VBASE, extra: "Les nouvelles annonces vont arriver ici." },
+    { id: "start", source: "vinted", title: "✅ Phone Scanner est en ligne", price: 0, currency: "EUR", url: VBASE,
+      extra: `⚡ Mode rapide : nouvelle lecture toutes les ${FAST.everySeconds} s (${FAST.domains.map(countryOf).join(", ")}).` },
     "Démarrage"
   );
 } catch (e) {
   console.error("Discord :", (e as Error).message);
 }
 
-await cycle(true); // premier tour silencieux : il mémorise l'existant
-console.log("✅ Premier tour terminé : les nouvelles annonces arrivent maintenant sur Discord");
+// Premier passage silencieux : il mémorise l'existant pour n'envoyer que les NOUVELLES annonces
+console.log("⏳ Mémorisation des annonces déjà en ligne…");
+await fastTick(true);
+saveSeen();
+console.log("✅ Prêt : chaque nouvelle annonce arrive maintenant sur Discord");
+
+let tick = 0;
+let lastLog = Date.now();
 while (true) {
-  await sleep(Math.max(config.intervalSeconds, 15) * 1000);
-  await cycle(false);
+  const t0 = Date.now();
+  if (FAST.enabled) await fastTick(false);
+  await sleep(2500);
+  await slowStep(false); // une recherche par modèle à chaque tour
+  if (++tick % 10 === 0) saveSeen();
+  if (Date.now() - lastLog > 5 * 60_000) {
+    console.log(`📊 ${sentTotal} annonces envoyées depuis le démarrage`);
+    lastLog = Date.now();
+  }
+  const wait = FAST.everySeconds * 1000 - (Date.now() - t0);
+  await sleep(Math.max(wait, 1500) + Math.floor(Math.random() * 1500)); // petit hasard = moins détectable
 }
