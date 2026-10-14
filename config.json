@@ -1,5 +1,11 @@
 {
   "intervalSeconds": 30,
+  "fast": {
+    "enabled": true,
+    "query": "iphone",
+    "everySeconds": 8,
+    "domains": ["www.vinted.fr"]
+  },
   "exclude": [
     "icloud", "pour pièces", "pour pieces", "pièces détachées", "pieces detachees",
     "boîte seule", "boite seule", "boîte vide", "boite vide", "boîte d'iphone", "boite d'iphone", "boîte d’iphone", "boite d’iphone", "boîte iphone", "boite iphone", "boîte apple", "boite apple",
