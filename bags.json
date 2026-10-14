@@ -1,0 +1,220 @@
+{
+  "intervalSeconds": 60,
+  "minPrice": 30,
+  "searches": [
+    {
+      "name": "👜 Louis Vuitton",
+      "query": "louis vuitton",
+      "brand": [
+        "Louis Vuitton"
+      ],
+      "maxPrice": 400
+    },
+    {
+      "name": "👜 Chanel",
+      "query": "chanel",
+      "brand": [
+        "Chanel"
+      ],
+      "maxPrice": 900
+    },
+    {
+      "name": "👜 Hermès",
+      "query": "hermes",
+      "brand": [
+        "Hermès",
+        "Hermes"
+      ],
+      "maxPrice": 900
+    },
+    {
+      "name": "👜 Dior",
+      "query": "dior",
+      "brand": [
+        "Dior",
+        "Christian Dior"
+      ],
+      "maxPrice": 500
+    },
+    {
+      "name": "👜 Goyard",
+      "query": "goyard",
+      "brand": [
+        "Goyard"
+      ],
+      "maxPrice": 500
+    },
+    {
+      "name": "👜 Celine",
+      "query": "celine",
+      "brand": [
+        "Celine",
+        "Céline"
+      ],
+      "maxPrice": 400
+    },
+    {
+      "name": "👜 Saint Laurent",
+      "query": "saint laurent",
+      "brand": [
+        "Saint Laurent",
+        "Yves Saint Laurent"
+      ],
+      "maxPrice": 350
+    },
+    {
+      "name": "👜 Gucci",
+      "query": "gucci",
+      "brand": [
+        "Gucci"
+      ],
+      "maxPrice": 300
+    },
+    {
+      "name": "👜 Prada",
+      "query": "prada",
+      "brand": [
+        "Prada"
+      ],
+      "maxPrice": 300
+    },
+    {
+      "name": "👜 Fendi",
+      "query": "fendi",
+      "brand": [
+        "Fendi"
+      ],
+      "maxPrice": 300
+    },
+    {
+      "name": "👜 Loewe",
+      "query": "loewe",
+      "brand": [
+        "Loewe"
+      ],
+      "maxPrice": 400
+    },
+    {
+      "name": "👜 Bottega Veneta",
+      "query": "bottega veneta",
+      "brand": [
+        "Bottega Veneta"
+      ],
+      "maxPrice": 400
+    },
+    {
+      "name": "👜 Miu Miu",
+      "query": "miu miu",
+      "brand": [
+        "Miu Miu"
+      ],
+      "maxPrice": 300
+    },
+    {
+      "name": "👜 Balenciaga",
+      "query": "balenciaga",
+      "brand": [
+        "Balenciaga"
+      ],
+      "maxPrice": 250
+    }
+  ],
+  "titleExclude": [
+    "porte cles",
+    "porte-cles",
+    "porte monnaie",
+    "porte-monnaie",
+    "porte carte",
+    "porte-carte",
+    "porte nom",
+    "porte-nom",
+    "pochette seule",
+    "charm",
+    "bijou de sac",
+    "dust bag seul",
+    "dustbag seul",
+    "housse",
+    "pochon",
+    "boite seule",
+    "boite vide",
+    "facture seule",
+    "sangle seule",
+    "anse seule",
+    "cadenas seul",
+    "insert",
+    "organisateur",
+    "organiseur",
+    "base shaper",
+    "protege",
+    "enfant",
+    "jouet",
+    "poupee",
+    "dust bag",
+    "dustbag",
+    "boite",
+    "sac en papier",
+    "sac papier",
+    "ruban",
+    "carte cadeau",
+    "echantillon"
+  ],
+  "fakeWords": [
+    "inspir",
+    "style louis",
+    "style lv",
+    "type louis",
+    "type lv",
+    "façon louis",
+    "facon louis",
+    "genre louis",
+    "replica",
+    "réplique",
+    "replique",
+    "copie",
+    "imitation",
+    "contrefa",
+    "fake",
+    "dupe",
+    "1:1",
+    "aaa",
+    "mirror",
+    "premium quality",
+    "qualité premium",
+    "qualite premium",
+    "haute qualité",
+    "haute qualite",
+    "non authentique",
+    "pas authentique",
+    "n'est pas authentique",
+    "authenticité inconnue",
+    "authenticite inconnue",
+    "sans garantie d'authenticit",
+    "je ne sais pas si",
+    "aucune idée si"
+  ],
+  "trustWords": [
+    "facture",
+    "ticket de caisse",
+    "preuve d'achat",
+    "preuve d achat",
+    "date code",
+    "code date",
+    "datecode",
+    "authentifi",
+    "certificat",
+    "entrupy",
+    "acheté en boutique",
+    "achete en boutique",
+    "boutique louis vuitton",
+    "puce",
+    "rfid",
+    "dustbag d'origine",
+    "dust bag d'origine",
+    "boîte d'origine",
+    "boite d'origine",
+    "carte de propriét",
+    "ticket",
+    "vérification vinted",
+    "verification vinted"
+  ]
+}
