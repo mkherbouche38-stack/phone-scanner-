@@ -51,23 +51,31 @@ const saveSeen = () => writeFileSync(SEEN_FILE, JSON.stringify([...seen].slice(-
 const rejected = new Set<string>();
 
 const COLORS = { vinted: 0x09b1ba, ebay: 0xe53238 } as const;
+const FLAGS: Record<string, string> = {
+  FR: "🇫🇷", BE: "🇧🇪", LU: "🇱🇺", NL: "🇳🇱", DE: "🇩🇪", AT: "🇦🇹", ES: "🇪🇸", IT: "🇮🇹", PT: "🇵🇹",
+  LT: "🇱🇹", SK: "🇸🇰", FI: "🇫🇮", IE: "🇮🇪", GR: "🇬🇷", HR: "🇭🇷", SI: "🇸🇮", EE: "🇪🇪", LV: "🇱🇻",
+};
 
 async function sendToDiscord(l: Listing, searchName: string, retry = 0): Promise<void> {
   const url = process.env.DISCORD_WEBHOOK_URL;
   if (!url) throw new Error("DISCORD_WEBHOOK_URL manquant");
+  const host = (() => { try { return new URL(l.url).host; } catch { return "www.vinted.fr"; } })();
+  const cc = countryOf("https://" + host);
   const body = {
     username: "Phone Scanner",
     embeds: [{
-      title: l.title.slice(0, 250),
+      author: { name: `${FLAGS[cc] ?? "🌍"} Vinted ${cc} · ${searchName}` },
+      title: l.price ? `${l.title.split(/,\s*marque\s*:/i)[0].slice(0, 200)} — ${l.price} €` : l.title,
       url: l.url,
       color: COLORS[l.source],
       fields: [
-        { name: "💰 Prix", value: `**${l.price} ${l.currency}**`, inline: true },
-        { name: "🛒 Source", value: l.source.toUpperCase(), inline: true },
-        { name: "🔎 Recherche", value: searchName, inline: true },
-        ...(l.extra ? [{ name: "ℹ️ Infos", value: l.extra, inline: false }] : []),
+        { name: "💰 Prix", value: `**${l.price} ${l.currency === "EUR" ? "€" : l.currency}**`, inline: true },
+        { name: l.price ? "📦 État" : "ℹ️ Infos", value: l.extra ?? "Non précisé", inline: !!l.price },
+        { name: "🌍 Pays", value: `${FLAGS[cc] ?? ""} ${cc}`, inline: true },
+        { name: "🔗 Annonce", value: `[Ouvrir sur Vinted](${l.url})`, inline: false },
       ],
       ...(l.image ? { image: { url: l.image } } : {}),
+      footer: { text: "Phone Scanner · nouvelle annonce" },
       timestamp: new Date().toISOString(),
     }],
   };
@@ -162,9 +170,33 @@ async function getCatalogHtml(v: VSession, u: URL): Promise<string> {
 const decode = (s: string) =>
   s.replace(/&amp;/g, "&").replace(/&quot;/g, '"').replace(/&#39;|&apos;/g, "'").replace(/&nbsp;/g, " ").replace(/&lt;/g, "<").replace(/&gt;/g, ">");
 
+// ---------- Lecture de la description (seulement pour les annonces qui passent les filtres) ----------
+// Si la page ne répond pas, on ne bloque pas l'annonce : mieux vaut une alerte qu'une affaire ratée.
+async function fetchDescription(l: Listing): Promise<string | null> {
+  if (l.source !== "vinted") return null;
+  try {
+    const host = new URL(l.url).host;
+    const v = sessionFor(host);
+    if (Date.now() < v.blockedUntil) return null;
+    const r = await fetch(l.url, { headers: vHeaders(v), redirect: "follow" });
+    storeCookies(v, r);
+    if (!r.ok) return null;
+    const html = (await r.text()).replace(/\\"/g, '"').replace(/\\n/g, " ").replace(/\\u0026/g, "&");
+    const parts: string[] = [];
+    for (const m of html.matchAll(/"description"\s*:\s*"([^"]{0,4000})"/g)) parts.push(m[1]);
+    const meta = html.match(/<meta[^>]+name=["']description["'][^>]+content=["']([^"']{0,2000})["']/i);
+    if (meta) parts.push(meta[1]);
+    const itemprop = html.match(/itemprop=["']description["'][^>]*>([\s\S]{0,4000}?)<\//i);
+    if (itemprop) parts.push(itemprop[1].replace(/<[^>]+>/g, " "));
+    return parts.length ? decode(parts.join(" ")) : "";
+  } catch {
+    return null;
+  }
+}
+
 const SP = "(?:\\s|\\u00a0|\\u202f|&nbsp;|&#160;|&#8239;)*";
 const PRICE_RE = new RegExp("(\\d{1,5}(?:[.,]\\d{1,2})?)" + SP + "(?:€|&euro;|&#8364;)");
-const STATE_RE = /(Neuf avec étiquette|Neuf sans étiquette|Très bon état|Bon état|Satisfaisant|Nuevo|Nuovo|Neu|Nieuw)/i;
+const STATE_RE = /(Neuf avec étiquette|Neuf sans étiquette|Très bon état|Bon état|Satisfaisant|Neu mit Etikett|Neu ohne Etikett|Sehr gut|Gut|Zufriedenstellend|Nuevo con etiquetas|Nuevo sin etiquetas|Muy bueno|Bueno|Nuovo con cartellino|Nuovo senza cartellino|Ottime|Buone|Nieuw met prijskaartje|Nieuw zonder prijskaartje|Zeer goed|Goed|Novo com etiquetas|Muito bom|Nuevo|Nuovo|Neu|Nieuw)/i;
 const IMG_RE = /https:\/\/images\d*\.vinted\.net\/[^"'\s)<>\\]+/;
 
 function parseCatalog(html: string, base = VBASE): Listing[] {
@@ -297,139 +329,4 @@ async function searchEbay(query: string, maxPrice?: number): Promise<Listing[]> 
 const MIN_PRIX = 20;
 
 // Pièces et accessoires : on regarde seulement le DÉBUT du titre (toutes langues)
-const PART_START = /^(ecran|batterie|boite|boitier|vitre|dalle|lcd|oled|camera|chassis|facade|nappe|connecteur|haut|ensemble|kit|lot|pack|piece|support|protection|coque|verre|cable|chargeur|bouton|capot|vibreur|tiroir|face id|case|hulle|funda|custodia|hoesje|capa|cover|etui|housse|skin|panzer|protector|kabel|glass|film|pochette|cargador|bumper|folio)/;
-
-// Retourne la raison du refus, ou null si l'annonce est acceptée
-const refusal = (l: Listing, s: Search): string | null => {
-  const t = norm(l.title);
-  const title = t.split(/,\s*marque\s*:/)[0].trim(); // titre réel de l'annonce
-  if (!t.includes("iphone")) return "pas un iPhone";
-
-  if (/iphone\s*[4-9](?![0-9])/.test(title) || /iphone\s*x(?![rs])/.test(title) || /iphone\s*se/.test(title)) {
-    return "modèle trop ancien";
-  }
-  if (PART_START.test(title)) return "pièce ou accessoire";
-  if (norm(l.extra ?? "").includes("neuf")) return "téléphone neuf";
-  if (l.price < MIN_PRIX) return `prix trop bas (${l.price}€)`;
-
-  // Plafond : le plus bas entre la recherche et le modèle réellement détecté
-  const mf = t.match(/modele\s*:\s*([^,]+)/);
-  const k = modelKey(title) ?? (mf ? modelKey(mf[1]) : null);
-  const caps: number[] = [];
-  if (s.maxPrice) caps.push(s.maxPrice);
-  if (k) {
-    const c = modelCap.get(k);
-    if (c) caps.push(c);
-  } else {
-    caps.push(UNKNOWN_MODEL_CAP);
-  }
-  const cap = Math.min(...caps);
-  if (l.price > cap) return `trop cher (${l.price}€ > ${cap}€)`;
-
-  const bad = [...config.exclude, ...(s.exclude ?? [])].find((w) => title.includes(norm(w)));
-  if (bad) return `mot exclu « ${bad} »`;
-  return null;
-};
-
-// ---------- Envoi ----------
-let sentTotal = 0;
-async function handle(items: Listing[], s: Search, silent: boolean): Promise<number> {
-  let fresh = 0;
-  for (const l of items.reverse()) {
-    if (seen.has(l.id)) continue;
-    fresh++;
-    const why = refusal(l, s);
-    if (why) {
-      if (!rejected.has(l.id)) {
-        rejected.add(l.id);
-        if (!silent) console.log(`🚫 ${why} | ${l.price}€ | ${l.title.slice(0, 70)}`);
-      }
-      continue;
-    }
-    seen.add(l.id);
-    if (silent) continue;
-    try {
-      await sendToDiscord(l, s.name);
-      sentTotal++;
-      console.log(`➡️ ${l.source} | ${l.price}€ | ${l.title}`);
-    } catch (e) {
-      seen.delete(l.id); // on réessaiera au prochain passage
-      console.error("Discord :", (e as Error).message);
-    }
-    await sleep(700);
-  }
-  return fresh;
-}
-
-// ⚡ Flux rapide : toutes les nouvelles annonces iPhone, tous pays configurés
-const FAST_SEARCH: Search = { name: "⚡ Nouvelle annonce", query: FAST.query };
-async function fastTick(silent: boolean) {
-  for (const host of FAST.domains) {
-    try {
-      const items = await searchVinted(FAST.query, FAST.priceTo, host, 1, true);
-      const fresh = await handle(items, { ...FAST_SEARCH, name: `⚡ Nouvelle annonce ${countryOf(host)}` }, silent);
-      // Beaucoup de nouveautés d'un coup : on lit aussi la page 2 pour ne rien rater
-      if (!silent && fresh >= 80) {
-        await sleep(1500);
-        await handle(await searchVinted(FAST.query, FAST.priceTo, host, 2, true), FAST_SEARCH, silent);
-      }
-    } catch (e) {
-      console.error(`[⚡ ${countryOf(host)}] :`, (e as Error).message);
-    }
-    if (FAST.domains.length > 1) await sleep(1500);
-  }
-}
-
-// 🐢 Filet de sécurité : les recherches par modèle de config.json, une seule par tour
-let slowIdx = 0;
-const slowReady = new Set<number>(); // le 1er passage de chaque recherche est silencieux
-async function slowStep(silentAll: boolean) {
-  const i = slowIdx++ % config.searches.length;
-  const s = config.searches[i];
-  const silent = silentAll || !slowReady.has(i);
-  slowReady.add(i);
-  const sources = [
-    { name: "vinted", run: () => searchVinted(s.query, s.maxPrice, "www.vinted.fr", 1, true) },
-    ...(EBAY_ENABLED ? [{ name: "ebay", run: () => searchEbay(s.query, s.maxPrice) }] : []),
-  ];
-  for (const src of sources) {
-    try {
-      await handle(await src.run(), s, silent);
-    } catch (e) {
-      console.error(`[${src.name}] "${s.query}" :`, (e as Error).message);
-    }
-  }
-}
-
-console.log("📡 Phone Scanner démarré");
-try {
-  await sendToDiscord(
-    { id: "start", source: "vinted", title: "✅ Phone Scanner est en ligne", price: 0, currency: "EUR", url: VBASE,
-      extra: `⚡ Mode rapide : nouvelle lecture toutes les ${FAST.everySeconds} s (${FAST.domains.map(countryOf).join(", ")}).` },
-    "Démarrage"
-  );
-} catch (e) {
-  console.error("Discord :", (e as Error).message);
-}
-
-// Premier passage silencieux : il mémorise l'existant pour n'envoyer que les NOUVELLES annonces
-console.log("⏳ Mémorisation des annonces déjà en ligne…");
-await fastTick(true);
-saveSeen();
-console.log("✅ Prêt : chaque nouvelle annonce arrive maintenant sur Discord");
-
-let tick = 0;
-let lastLog = Date.now();
-while (true) {
-  const t0 = Date.now();
-  if (FAST.enabled) await fastTick(false);
-  await sleep(2500);
-  await slowStep(false); // une recherche par modèle à chaque tour
-  if (++tick % 10 === 0) saveSeen();
-  if (Date.now() - lastLog > 5 * 60_000) {
-    console.log(`📊 ${sentTotal} annonces envoyées depuis le démarrage`);
-    lastLog = Date.now();
-  }
-  const wait = FAST.everySeconds * 1000 - (Date.now() - t0);
-  await sleep(Math.max(wait, 1500) + Math.floor(Math.random() * 1500)); // petit hasard = moins détectable
-}
+const PART_START = /^(ecran|batterie|boite|boitier|vitre|dalle|lcd|oled|camera|chassis|facade|nappe
